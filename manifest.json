@@ -1,6 +1,6 @@
 {
     "display_name": "API空内容重试插件",
-    "loading_order": 10,
+    "loading_order": 100,
     "requires": [],
     "optional": [],
     "js": "index.js",
