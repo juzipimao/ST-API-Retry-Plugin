@@ -12,6 +12,7 @@
     // 导入SillyTavern API
     let extension_settings, saveSettingsDebounced;
     let toastr, eventSource, event_types;
+    let callGenericPopup, POPUP_TYPE;
 
     // 默认设置
     const DEFAULT_SETTINGS = {
@@ -20,7 +21,8 @@
         baseDelay: 1000,        // 基础延迟(毫秒)
         enableLogging: true,    // 启用日志
         minContentLength: 5,    // 最小内容长度
-        checkWhitespace: true   // 检查空白字符
+        checkWhitespace: true,  // 检查空白字符
+        interceptRules: []      // API拦截规则（为空时表示兼容旧行为：全部拦截）
     };
 
     let settings = {};
@@ -77,9 +79,46 @@
         }
     }
 
+    // 判断是否需要拦截某个请求
+    function matchesRule(url, rule) {
+        if (!rule || typeof rule !== 'string') return false;
+        // 正则规则：以 / 开头且以 / 结尾
+        if (rule.length >= 2 && rule.startsWith('/') && rule.endsWith('/')) {
+            try {
+                const re = new RegExp(rule.slice(1, -1));
+                return re.test(url);
+            } catch (e) {
+                // 无效正则则忽略
+                return false;
+            }
+        }
+        // 子串匹配（大小写敏感，与 URL 保持一致）
+        return url.includes(rule);
+    }
+
+    function shouldIntercept(url) {
+        const rules = Array.isArray(settings.interceptRules) ? settings.interceptRules : [];
+        if (!rules.length) {
+            // 规则为空：不拦截任何请求（白名单模式）
+            return false;
+        }
+        return rules.some(rule => matchesRule(url, rule));
+    }
+
     // 增强的fetch函数
     async function enhancedFetch(url, options = {}) {
         if (!settings.enabled) {
+            return originalFetch(url, options);
+        }
+
+        // 未命中拦截规则：直接透传
+        try {
+            const u = typeof url === 'string' ? url : (url?.url || String(url));
+            if (!shouldIntercept(u)) {
+                return originalFetch(url, options);
+            }
+        } catch (e) {
+            // URL 解析失败则按不拦截处理
             return originalFetch(url, options);
         }
         
@@ -93,7 +132,18 @@
                 
                 // 检查响应状态
                 if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    // 尝试附加原始错误正文
+                    try {
+                        const errClone = response.clone();
+                        const errText = await errClone.text();
+                        const httpError = new Error(`HTTP ${response.status}: ${response.statusText}\n${errText || ''}`.trim());
+                        httpError.status = response.status;
+                        httpError.statusText = response.statusText;
+                        httpError.body = errText;
+                        throw httpError;
+                    } catch (e) {
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    }
                 }
                 
                 // 克隆响应以便检查内容
@@ -115,8 +165,11 @@
                         await delay(delayMs);
                         continue;
                     } else {
-                        log(`达到最大重试次数，返回空响应`, true);
-                        showNotification(`API请求${settings.maxRetries + 1}次均返回空内容`, 'error');
+                        // 重试全部失败：显示内置错误弹窗并抛出错误
+                        const msg = `检测到空内容，已连续 ${settings.maxRetries + 1} 次尝试无有效响应。`;
+                        log(`达到最大重试次数：${msg}`, true);
+                        showBuiltinError(msg);
+                        throw new Error(msg);
                     }
                 } else {
                     if (attempt > 0) {
@@ -141,7 +194,27 @@
         
         // 所有重试都失败了
         log(`所有重试尝试失败，抛出最后一个错误`, true);
-        throw lastError || new Error('重试次数已达上限');
+        const err = lastError || new Error('重试次数已达上限');
+        // 使用酒馆自带弹窗显示原始错误
+        showBuiltinError(err && (err.stack || err.message || String(err)));
+        throw err;
+    }
+
+    // 显示酒馆自带的错误弹窗
+    function showBuiltinError(message) {
+        if (!message) return;
+        try {
+            if (typeof callGenericPopup === 'function' && POPUP_TYPE) {
+                callGenericPopup(String(message), POPUP_TYPE.TEXT, '请求失败');
+            } else if (typeof toastr !== 'undefined') {
+                toastr.error(String(message), '请求失败');
+            } else {
+                console.error(`[${EXTENSION_NAME}]`, message);
+            }
+        } catch (e) {
+            console.error(`[${EXTENSION_NAME}] 显示错误弹窗失败:`, e);
+            try { toastr?.error(String(message), '请求失败'); } catch {}
+        }
     }
 
     // 加载设置
@@ -200,6 +273,16 @@
                                 <input id="enable-logging" type="checkbox" ${settings.enableLogging ? 'checked' : ''}>
                                 <span>启用控制台日志</span>
                             </label>
+
+                            <hr class="menu_divider">
+
+                            <div class="range-block-title">API拦截管理</div>
+                            <small class="notes">仅当请求 URL 匹配以下任一规则时才应用重试。规则以 /.../ 形式可使用正则；否则为子串匹配。未配置规则时，不拦截任何请求。</small>
+                            <div class="flex-container" style="gap: 8px; align-items: center; margin-top: 6px;">
+                                <input id="intercept-pattern" type="text" class="text_pole" placeholder="例如：/api/chat/ 或 /\\/api\\/openai\\//">
+                                <button id="add-intercept-rule" class="menu_button">添加规则</button>
+                            </div>
+                            <ul id="intercept-rules-list" class="list-group" style="margin-top: 8px;"></ul>
                             
                             <div class="flex-container">
                                 <button id="retry-test" class="menu_button">测试重试功能</button>
@@ -251,6 +334,68 @@
         $('#enable-logging').on('change', function() {
             settings.enableLogging = this.checked;
             saveSettings();
+        });
+
+        // 渲染拦截规则列表
+        function renderRules() {
+            const list = $('#intercept-rules-list');
+            list.empty();
+            const rules = Array.isArray(settings.interceptRules) ? settings.interceptRules : [];
+            if (!rules.length) {
+                list.append('<li class="list-group-item">未配置规则（当前不拦截任何请求）</li>');
+                return;
+            }
+            rules.forEach((rule, idx) => {
+                const item = $(`
+                    <li class="list-group-item" data-index="${idx}">
+                        <span class="rule-text">${$('<div>').text(rule).html()}</span>
+                        <div style="float:right; display:flex; gap:6px;">
+                            <button class="menu_button small edit-rule">编辑</button>
+                            <button class="menu_button small delete-rule">删除</button>
+                        </div>
+                    </li>
+                `);
+                list.append(item);
+            });
+        }
+
+        renderRules();
+
+        // 添加规则
+        $('#add-intercept-rule').on('click', function() {
+            const val = String($('#intercept-pattern').val() || '').trim();
+            if (!val) return;
+            settings.interceptRules = Array.isArray(settings.interceptRules) ? settings.interceptRules : [];
+            settings.interceptRules.push(val);
+            saveSettings();
+            $('#intercept-pattern').val('');
+            renderRules();
+            showNotification('已添加拦截规则', 'success');
+        });
+
+        // 编辑/删除规则（事件委托）
+        $('#intercept-rules-list').on('click', '.delete-rule', function() {
+            const idx = parseInt($(this).closest('li').attr('data-index'));
+            if (Number.isInteger(idx)) {
+                settings.interceptRules.splice(idx, 1);
+                saveSettings();
+                renderRules();
+            }
+        });
+
+        $('#intercept-rules-list').on('click', '.edit-rule', function() {
+            const li = $(this).closest('li');
+            const idx = parseInt(li.attr('data-index'));
+            const oldVal = settings.interceptRules[idx];
+            const newVal = prompt('编辑规则（/.../ 为正则，否则为子串匹配）', oldVal);
+            if (newVal != null) {
+                const v = String(newVal).trim();
+                if (v) {
+                    settings.interceptRules[idx] = v;
+                    saveSettings();
+                    renderRules();
+                }
+            }
         });
         
         // 测试按钮
@@ -364,6 +509,14 @@
                     extension_settings = window.extension_settings;
                     saveSettingsDebounced = window.saveSettingsDebounced;
                     toastr = window.toastr;
+                    // 导入内置弹窗模块
+                    try {
+                        const popupModule = await import('/scripts/popup.js');
+                        callGenericPopup = popupModule.callGenericPopup;
+                        POPUP_TYPE = popupModule.POPUP_TYPE;
+                    } catch (e) {
+                        log('无法导入内置弹窗模块，退回到toastr错误提示', true);
+                    }
                     break;
                 }
             } catch (e) {
