@@ -28,8 +28,8 @@
 - 少于 Token 阈值时重试: 默认开启；阈值默认 400。
   - 计数方式: 优先解析常见字段（如 `choices[].message.content`、`output_text` 等）并使用当前模型分词器；不可用时回退字符比率估算。
 - API 拦截管理: 仅命中规则才会应用重试（白名单）。
-  - 添加规则: 支持两种形式：
-    - 子串包含（不区分大小写）：示例 `love.qinyan`、`/chat-completions/generate`
+  - 添加规则: 支持两种形式：  
+    - 子串包含（不区分大小写）：示例 `FF.exmaple.xyz`、`/chat-completions/generate`
     - 正则：以 `/.../` 包裹，如 `/\\/api\\/openai\\//`
   - 规则列表: 支持编辑、删除；点击“插入默认规则”快速加入 `/chat-completions/generate`（不会刷新页面，且自动去重）。
 
