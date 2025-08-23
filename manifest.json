@@ -1,0 +1,12 @@
+{
+    "display_name": "API空内容重试插件",
+    "loading_order": 10,
+    "requires": [],
+    "optional": [],
+    "js": "index.js",
+    "css": "style.css",
+    "author": "Claude Code",
+    "version": "1.0.0",
+    "homePage": "",
+    "auto_update": true
+}

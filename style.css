@@ -1,0 +1,185 @@
+/* API空内容重试插件样式 */
+
+#api-retry-settings {
+    border: 1px solid var(--SmartThemeBodyColor);
+    border-radius: 10px;
+    margin: 10px 0;
+    background: var(--SmartThemeBlurTintColor);
+    font-family: 'Microsoft YaHei', 'PingFang SC', sans-serif;
+}
+
+#api-retry-settings .inline-drawer-header {
+    padding: 10px 15px;
+    background: var(--SmartThemeQuoteColor);
+    border-radius: 10px 10px 0 0;
+    font-weight: bold;
+    color: var(--SmartThemeBodyColor);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+}
+
+#api-retry-settings .inline-drawer-content {
+    padding: 15px;
+    border-radius: 0 0 10px 10px;
+}
+
+#api-retry-settings .range-block {
+    margin: 10px 0;
+}
+
+#api-retry-settings .range-block-title {
+    color: var(--SmartThemeBodyColor);
+    margin-bottom: 5px;
+    font-weight: 500;
+    font-size: 14px;
+}
+
+#api-retry-settings input[type="range"] {
+    width: 100%;
+    margin: 5px 0;
+    accent-color: var(--SmartThemeQuoteColor);
+}
+
+#api-retry-settings .checkbox_label {
+    display: flex;
+    align-items: center;
+    margin: 10px 0;
+    color: var(--SmartThemeBodyColor);
+    font-size: 14px;
+}
+
+#api-retry-settings .checkbox_label input[type="checkbox"] {
+    margin-right: 8px;
+    accent-color: var(--SmartThemeQuoteColor);
+    transform: scale(1.1);
+}
+
+#api-retry-settings .flex-container {
+    margin-top: 15px;
+    gap: 10px;
+}
+
+#api-retry-settings .menu_button {
+    padding: 8px 16px;
+    border-radius: 6px;
+    border: 1px solid var(--SmartThemeQuoteColor);
+    background: var(--SmartThemeQuoteColor);
+    color: var(--SmartThemeBodyColor);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    min-width: 100px;
+}
+
+#api-retry-settings .menu_button:hover {
+    background: var(--SmartThemeBlurTintColor);
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+}
+
+#api-retry-settings .menu_button:active {
+    transform: translateY(0);
+}
+
+#retry-test {
+    background: #28a745 !important;
+    border-color: #28a745 !important;
+}
+
+#retry-test:hover {
+    background: #218838 !important;
+}
+
+#retry-reset {
+    background: #dc3545 !important;
+    border-color: #dc3545 !important;
+}
+
+#retry-reset:hover {
+    background: #c82333 !important;
+}
+
+/* 折叠动画效果 */
+#api-retry-settings .inline-drawer-content {
+    overflow: hidden;
+    transition: max-height 0.3s ease-out;
+}
+
+#api-retry-settings:not(.drawer_open) .inline-drawer-content {
+    max-height: 0;
+    padding: 0 15px;
+}
+
+#api-retry-settings.drawer_open .inline-drawer-content {
+    max-height: 500px;
+}
+
+#api-retry-settings .inline-drawer-icon {
+    transition: transform 0.3s ease;
+}
+
+#api-retry-settings.drawer_open .inline-drawer-icon {
+    transform: rotate(180deg);
+}
+
+/* 状态指示器 */
+#api-retry-settings .status-indicator {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-right: 8px;
+}
+
+.status-enabled {
+    background-color: #28a745;
+}
+
+.status-disabled {
+    background-color: #dc3545;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+    #api-retry-settings .flex-container {
+        flex-direction: column;
+    }
+    
+    #api-retry-settings .menu_button {
+        width: 100%;
+        min-width: unset;
+    }
+}
+
+/* 暗色主题适配 */
+@media (prefers-color-scheme: dark) {
+    #api-retry-settings {
+        border-color: #444;
+    }
+    
+    #api-retry-settings .inline-drawer-header {
+        background: #333;
+        color: #fff;
+    }
+    
+    #api-retry-settings .range-block-title,
+    #api-retry-settings .checkbox_label {
+        color: #ddd;
+    }
+}
+
+/* Toast通知样式调整 */
+.toast-success {
+    background-color: #28a745 !important;
+}
+
+.toast-error {
+    background-color: #dc3545 !important;
+}
+
+.toast-info {
+    background-color: #17a2b8 !important;
+}
