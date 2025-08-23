@@ -92,8 +92,7 @@
 
 **当前版本**: 1.0.0  
 **兼容性**: SillyTavern 1.10+  
-**开发者**: Claude Code  
+**开发者**: DayBreak 
 
 ---
 
-*本插件基于 Hikarushmz/fetch-retry 项目的思路开发，专注于空内容重试功能的优化实现。*
