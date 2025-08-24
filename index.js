@@ -357,7 +357,7 @@
 
                             <div class="range-block">
                                 <div class="range-block-title">最大重试次数: <span id="retry-count-value">${settings.maxRetries}</span></div>
-                                <input id="retry-count" type="range" min="1" max="10" step="1" value="${settings.maxRetries}">
+                                <input id="retry-count" type="range" min="1" max="40" step="1" value="${settings.maxRetries}">
                             </div>
 
                             <div class="range-block">
