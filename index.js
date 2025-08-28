@@ -55,14 +55,42 @@
         return false;
     }
 
-    // 延迟函数
-    function delay(ms) {
-        return new Promise(resolve => setTimeout(resolve, ms));
+    // 延迟函数（可感知 AbortSignal）
+    function delay(ms, signal) {
+        if (!signal) return new Promise(resolve => setTimeout(resolve, ms));
+        if (signal.aborted) {
+            // 立即以 AbortError 结束
+            throw new DOMException('Aborted', 'AbortError');
+        }
+        return new Promise((resolve, reject) => {
+            const timer = setTimeout(() => {
+                cleanup();
+                resolve();
+            }, ms);
+            const onAbort = () => {
+                clearTimeout(timer);
+                cleanup();
+                reject(new DOMException('Aborted', 'AbortError'));
+            };
+            const cleanup = () => {
+                try { signal.removeEventListener('abort', onAbort); } catch {}
+            };
+            try { signal.addEventListener('abort', onAbort, { once: true }); } catch {}
+        });
     }
 
-    // 计算重试延迟 (指数退避)
+    // 计算重试延迟（固定间隔，不使用指数退避）
     function calculateDelay(attempt) {
-        return settings.baseDelay * Math.pow(2, attempt);
+        return Number(settings.baseDelay) || 0;
+    }
+
+    function isAbortError(error) {
+        if (!error) return false;
+        // 标准 Fetch AbortError
+        if (error.name === 'AbortError') return true;
+        // 一些环境中仅 message 含有 aborted/canceled
+        const msg = String(error.message || error.toString() || '').toLowerCase();
+        return msg.includes('aborted') || msg.includes('abort') || msg.includes('canceled') || msg.includes('cancelled');
     }
 
     // 记录日志
@@ -194,9 +222,15 @@
         }
 
         let lastError = null;
+        const abortSignal = options && options.signal ? options.signal : undefined;
 
         for (let attempt = 0; attempt <= settings.maxRetries; attempt++) {
             try {
+                // 若已被中断，直接停止重试
+                if (abortSignal?.aborted) {
+                    log(`请求已被中断，停止重试: ${url}`);
+                    throw new DOMException('Aborted', 'AbortError');
+                }
                 log(`尝试请求 ${url} (第${attempt + 1}次)`);
 
                 const response = await originalFetch(url, options);
@@ -244,13 +278,16 @@
                         const delayMs = calculateDelay(attempt);
                         log(`检测到空内容，${delayMs}ms后重试`, true);
                         showRetryToast(attempt + 2, settings.maxRetries + 1, delayMs);
-                        await delay(delayMs);
+                        await delay(delayMs, abortSignal);
                         continue;
                     } else {
                         // 重试全部失败：显示内置错误弹窗并抛出错误
                         const msg = `检测到空内容，已连续 ${settings.maxRetries + 1} 次尝试无有效响应。`;
                         log(`达到最大重试次数：${msg}`, true);
-                        showBuiltinError(msg);
+                        // 若为中断，不弹出错误
+                        if (!abortSignal?.aborted) {
+                            showBuiltinError(msg);
+                        }
                         throw new Error(msg);
                     }
                 } else {
@@ -265,12 +302,15 @@
             } catch (error) {
                 lastError = error;
                 log(`请求失败: ${error.message}`, true);
-
+                // 中断：立即抛出，不再重试，也不弹窗
+                if (isAbortError(error) || abortSignal?.aborted) {
+                    throw error;
+                }
                 if (attempt < settings.maxRetries) {
                     const delayMs = calculateDelay(attempt);
                     log(`${delayMs}ms后重试`);
                     showRetryToast(attempt + 2, settings.maxRetries + 1, delayMs);
-                    await delay(delayMs);
+                    await delay(delayMs, abortSignal);
                 }
             }
         }
@@ -278,8 +318,11 @@
         // 所有重试都失败了
         log(`所有重试尝试失败，抛出最后一个错误`, true);
         const err = lastError || new Error('重试次数已达上限');
-        // 使用酒馆自带弹窗显示原始错误
-        showBuiltinError(err && (err.stack || err.message || String(err)));
+        // 发生中断：直接抛出，不显示弹窗
+        if (!isAbortError(err) && !(abortSignal?.aborted)) {
+            // 使用酒馆自带弹窗显示原始错误
+            showBuiltinError(err && (err.stack || err.message || String(err)));
+        }
         throw err;
     }
 
